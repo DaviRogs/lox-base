@@ -115,6 +115,14 @@ class And(Expr):
 
     Ex.: x and y
     """
+    left: Expr
+    right: Expr
+
+    def eval(self, ctx: Ctx):
+        left_val = self.left.eval(ctx)
+        if not left_val:
+            return False
+        return self.right.eval(ctx)
 
 
 @dataclass
@@ -123,6 +131,15 @@ class Or(Expr):
     Uma operação infixa com dois operandos.
     Ex.: x or y
     """
+    left: Expr
+    right: Expr
+
+    def eval(self, ctx: Ctx):
+        left_val = self.left.eval(ctx)
+        if left_val:
+            return True
+        return self.right.eval(ctx)
+
 
 
 @dataclass
@@ -132,6 +149,12 @@ class UnaryOp(Expr):
 
     Ex.: -x, !x
     """
+    operand: Expr
+    op: Callable[[Value], Value]
+
+    def eval(self, ctx: Ctx):
+        value = self.operand.eval(ctx)
+        return self.op(value)
 
 
 @dataclass
@@ -141,18 +164,16 @@ class Call(Expr):
 
     Ex.: fat(42)
     """
-    name: str
+    callee: Expr
     params: list[Expr]
     
     def eval(self, ctx: Ctx):
-        func = ctx[self.name]
-        params = []
-        for param in self.params:
-            params.append(param.eval(ctx))
-        
+        func = self.callee.eval(ctx)
+        args = [param.eval(ctx) for param in self.params]
+
         if callable(func):
-            return func(*params)
-        raise TypeError(f"{self.name} não é uma função!")
+            return func(*args)
+        raise TypeError(f"'{func}' não é uma função!")
 
 
 @dataclass
@@ -180,6 +201,13 @@ class Assign(Expr):
 
     Ex.: x = 42
     """
+    name: str
+    value: Expr
+
+    def eval(self, ctx: Ctx):
+        result = self.value.eval(ctx)
+        ctx[self.name] = result
+        return result
 
 
 @dataclass
@@ -189,6 +217,15 @@ class Getattr(Expr):
 
     Ex.: x.y
     """
+    obj: Expr
+    name: str
+
+    def eval(self, ctx: Ctx):
+        obj_value = self.obj.eval(ctx)
+        try:
+            return getattr(obj_value, self.name)
+        except AttributeError:
+            raise AttributeError(f"O objeto {obj_value} não possui o atributo '{self.name}'")
 
 
 @dataclass
@@ -198,7 +235,15 @@ class Setattr(Expr):
 
     Ex.: x.y = 42
     """
+    obj: Expr
+    name: str
+    value: Expr
 
+    def eval(self, ctx: Ctx):
+        obj_val = self.obj.eval(ctx)
+        val = self.value.eval(ctx)
+        setattr(obj_val, self.name, val)
+        return val
 
 #
 # COMANDOS

@@ -48,8 +48,8 @@ class LoxTransformer(Transformer):
     ne = op_handler(op.ne)
 
     # Outras expressões
-    def call(self, name: Var, params: list):
-        return Call(name.name, params)
+    def call(self, callee: Expr, params: list):
+        return Call(callee, params)
         
     def params(self, *args):
         params = list(args)
@@ -76,3 +76,25 @@ class LoxTransformer(Transformer):
 
     def BOOL(self, token):
         return Literal(token == "true")
+    
+    def getattr(self, obj, name):
+        return Getattr(obj, name.name)
+    
+    def neg(self, operand):
+        return UnaryOp(operand, op.neg) 
+
+    def not_(self, operand):
+        return UnaryOp(operand, op.not_)
+    
+    def and_(self, left, right):
+        return And(left, right)
+    
+    def or_(self, left, right):
+        return Or(left, right)
+    
+    def assign(self, name: Var, value: Expr):
+        return Assign(name.name, value)
+
+    def setattr_assign(self, target, value):
+        return Setattr(target.obj, target.name, value)
+
