@@ -1,6 +1,7 @@
 from abc import ABC
 from dataclasses import dataclass
 from typing import Callable
+from .runtime import LoxFunction, LoxReturn
 
 from .ctx import Ctx
 
@@ -107,6 +108,12 @@ class Literal(Expr):
     def eval(self, ctx: Ctx):
         return self.value
 
+@dataclass
+class ExprStmt(Stmt):
+    expr: Expr
+
+    def eval(self, ctx: Ctx):
+        self.expr.eval(ctx)
 
 @dataclass
 class And(Expr):
@@ -120,8 +127,8 @@ class And(Expr):
 
     def eval(self, ctx: Ctx):
         left_val = self.left.eval(ctx)
-        if not left_val:
-            return False
+        if left_val is False or left_val is None:
+            return left_val
         return self.right.eval(ctx)
 
 
@@ -136,8 +143,12 @@ class Or(Expr):
 
     def eval(self, ctx: Ctx):
         left_val = self.left.eval(ctx)
-        if left_val:
-            return True
+        if left_val is not False and left_val is not None:
+            if isinstance(left_val, float) and left_val == 0:
+                return left_val
+            if isinstance(left_val, str) and left_val == "":
+                return left_val
+            return left_val
         return self.right.eval(ctx)
 
 
@@ -206,7 +217,7 @@ class Assign(Expr):
 
     def eval(self, ctx: Ctx):
         result = self.value.eval(ctx)
-        ctx[self.name] = result
+        ctx.assign(self.name, result)
         return result
 
 
@@ -256,10 +267,22 @@ class Print(Stmt):
     Ex.: print "Hello, world!";
     """
     expr: Expr
-    
+
     def eval(self, ctx: Ctx):
         value = self.expr.eval(ctx)
-        print(value)
+        if value is None:
+            print("nil")
+        elif value is True:
+            print("true")
+        elif value is False:
+            print("false")
+        elif isinstance(value, float):
+            if value.is_integer():
+                print(int(value))
+            else:
+                print(value)
+        else:
+            print(value)
 
 
 @dataclass
@@ -269,6 +292,12 @@ class Return(Stmt):
 
     Ex.: return x;
     """
+    value: Expr | None
+
+    def eval(self, ctx: Ctx):
+        return_value = self.value.eval(ctx) if self.value else None
+        raise LoxReturn(return_value)
+
 
 
 @dataclass
@@ -278,7 +307,12 @@ class VarDef(Stmt):
 
     Ex.: var x = 42;
     """
+    name: str
+    initializer: Expr
 
+    def eval(self, ctx: Ctx):
+        value = self.initializer.eval(ctx)
+        ctx.var_def(self.name, value)
 
 @dataclass
 class If(Stmt):
@@ -287,16 +321,18 @@ class If(Stmt):
 
     Ex.: if (x > 0) { ... } else { ... }
     """
+    condition: Expr
+    then_branch: Stmt
+    else_branch: Stmt
 
+    def eval(self, ctx: Ctx):
+        condition_val = self.condition.eval(ctx)
 
-@dataclass
-class For(Stmt):
-    """
-    Representa um laço de repetição.
-
-    Ex.: for (var i = 0; i < 10; i++) { ... }
-    """
-
+        # Em Lox, a condição só é falsa se for "false" ou "nil"
+        if condition_val is not False and condition_val is not None:
+            self.then_branch.eval(ctx)
+        else:
+            self.else_branch.eval(ctx)
 
 @dataclass
 class While(Stmt):
@@ -305,6 +341,15 @@ class While(Stmt):
 
     Ex.: while (x > 0) { ... }
     """
+    condition: Expr
+    body: Stmt
+
+    def eval(self, ctx: Ctx):
+        while True:
+            condition_val = self.condition.eval(ctx)
+            if condition_val is False or condition_val is None:
+                break
+            self.body.eval(ctx)
 
 
 @dataclass
@@ -314,6 +359,12 @@ class Block(Node):
 
     Ex.: { var x = 42; print x;  }
     """
+    stmts: list[Stmt]
+
+    def eval(self, ctx: Ctx):
+        new_ctx = ctx.push({})
+        for stmt in self.stmts:
+            stmt.eval(new_ctx)
 
 
 @dataclass
@@ -323,7 +374,15 @@ class Function(Stmt):
 
     Ex.: fun f(x, y) { ... }
     """
+    name: str
+    params: list[Var]
+    body: Block
 
+    def eval(self, ctx: Ctx):
+        param_names = [p.name for p in self.params]
+        function = LoxFunction(self.name, param_names, self.body, ctx)
+        ctx.var_def(self.name, function)
+        return None
 
 @dataclass
 class Class(Stmt):

@@ -1,20 +1,51 @@
 ?start     : program
 
-program    : stmt*
+program    : declaration*
 
-?stmt      : expr ";"
+?declaration : fun_decl
+             | var_decl
+             | stmt
+
+fun_decl   : "fun" VAR "(" fun_params ")" block -> function_declaration
+fun_params : [VAR ("," VAR)*]
+
+?stmt      : expr ";" -> expr_stmt
            | print_cmd
-           // | if_cmd
-           // | for_cmd
-           // | ...
+           | block
+           | if_cmd
+           | while_cmd
+           | for_cmd
+           | return_cmd
+
+for_cmd : "for" "(" for_init for_cond ";" for_incr ")" stmt -> for_cmd
+
+?for_init : var_decl
+          | expr ";"
+          | ";"   -> empty_init
+
+?for_cond : expr
+          |         -> empty_cond
+
+?for_incr : expr
+          |         -> empty_incr
+
+while_cmd  : "while" "(" expr ")" stmt -> while_cmd
+         
+if_cmd   : "if" "(" expr ")" stmt ("else" stmt)? -> if_cmd
+
+block      : "{" declaration* "}"
 
 print_cmd  : "print" expr ";"
+
+return_cmd : "return" expr? ";" -> return_stmt
+
+var_decl   : "var" VAR ("=" expr)? ";" -> var_decl
 
 // EXPRESSÕES
 ?expr      : assignment
 
 ?assignment  : getattr "=" assignment   -> setattr_assign
-           | VAR "=" assignment  -> assign
+           | VAR "=" assignment   -> assign
            | logic
 
 ?logic     : logic "or" test -> or_
@@ -39,8 +70,8 @@ print_cmd  : "print" expr ";"
            | term "/" unary   -> div 
            | unary
 
-?unary     : "-" atom -> neg
-           | "!" atom -> not_
+?unary     : "-" unary -> neg
+           | "!" unary -> not_
            | atom
 
 ?atom      : call
@@ -55,8 +86,7 @@ print_cmd  : "print" expr ";"
 getattr    : atom "." VAR
  
 call       : atom "(" params ")"
-
-params     : [ expr ("," expr )* ]
+params     : [expr ("," expr)*]
 
 BOOL.2     : "true" | "false"
 VAR.1      : /[a-z_]\w*/

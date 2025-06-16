@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from .ctx import Ctx
 
 if TYPE_CHECKING:
-    from .ast import Stmt, Value
+    from .ast import Block, Value
 
 __all__ = [
     "add",
@@ -27,42 +27,60 @@ __all__ = [
 ]
 
 
-class LoxInstance:
+class LoxReturn(Exception):
     """
-    Classe base para todos os objetos Lox.
+    Exceção usada para implementar o comando 'return' do Lox.
     """
+    def __init__(self, value: "Value"):
+        super().__init__()
+        self.value = value
 
 
 @dataclass
 class LoxFunction:
     """
-    Classe base para todas as funções Lox.
+    Representa uma função Lox em tempo de execução.
+    Guarda os parâmetros, o corpo (AST) e o contexto (closure).
     """
-
     name: str
-    args: list[str]
-    body: list["Stmt"]
+    params: list[str]
+    body: "Block"
     ctx: Ctx
 
-    def __call__(self, *args):
-        env = dict(zip(self.args, args, strict=True))
-        env = self.ctx.push(env)
+    def call(self, args: list["Value"]):
+        """Executa a função com uma lista de argumentos."""
+        # 1. Valida se o número de argumentos está correto
+        if len(args) != len(self.params):
+            raise TypeError(
+                f"'{self.name}' esperava {len(self.params)} argumentos, mas recebeu {len(args)}."
+            )
 
+        # 2. Cria o ambiente de execução da chamada, combinando os parâmetros
+        #    com os argumentos recebidos.
+        local_env = dict(zip(self.params, args))
+
+        # 3. Este novo ambiente local é aninhado dentro do contexto onde a função
+        #    foi declarada (self.ctx), criando o closure.
+        call_ctx = self.ctx.push(local_env)
+
+        # 4. Executa o corpo da função, tratando a exceção de retorno.
         try:
-            for stmt in self.body:
-                stmt.eval(env)
-        except LoxReturn as e:
-            return e.value
+            self.body.eval(call_ctx)
+        except LoxReturn as ex:
+            return ex.value
+        
+        # 5. Se a função terminar sem um 'return' explícito, ela retorna 'nil'.
+        return None
+
+    def __call__(self, *args):
+        """Torna a função Lox chamável como uma função Python."""
+        return self.call(list(args))
 
 
-class LoxReturn(Exception):
+class LoxInstance:
     """
-    Exceção para retornar de uma função Lox.
+    Classe base para todos os objetos Lox.
     """
-
-    def __init__(self, value):
-        self.value = value
-        super().__init__()
 
 
 class LoxError(Exception):
