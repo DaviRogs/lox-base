@@ -14,9 +14,7 @@ from .ctx import Ctx
 from .node import Node
 
 
-#
 # TIPOS BÁSICOS
-#
 
 # Tipos de valores que podem aparecer durante a execução do programa
 Value = bool | str | float | None
@@ -31,7 +29,6 @@ class Expr(Node, ABC):
     funções, etc.
     """
 
-
 class Stmt(Node, ABC):
     """
     Classe base para comandos.
@@ -39,7 +36,6 @@ class Stmt(Node, ABC):
     Comandos são associdos a construtos sintáticos que alteram o fluxo de
     execução do código ou declaram elementos como classes, funções, etc.
     """
-
 
 @dataclass
 class Program(Node):
@@ -55,10 +51,8 @@ class Program(Node):
         for stmt in self.stmts:
             stmt.eval(ctx)
 
-
-#
 # EXPRESSÕES
-#
+
 @dataclass
 class BinOp(Expr):
     """
@@ -76,7 +70,6 @@ class BinOp(Expr):
         right_value = self.right.eval(ctx)
         return self.op(left_value, right_value)
 
-
 @dataclass
 class Var(Expr):
     """
@@ -92,7 +85,6 @@ class Var(Expr):
             return ctx[self.name]
         except KeyError:
             raise NameError(f"variável {self.name} não existe!")
-
 
 @dataclass
 class Literal(Expr):
@@ -131,7 +123,6 @@ class And(Expr):
             return left_val
         return self.right.eval(ctx)
 
-
 @dataclass
 class Or(Expr):
     """
@@ -151,8 +142,6 @@ class Or(Expr):
             return left_val
         return self.right.eval(ctx)
 
-
-
 @dataclass
 class UnaryOp(Expr):
     """
@@ -166,7 +155,6 @@ class UnaryOp(Expr):
     def eval(self, ctx: Ctx):
         value = self.operand.eval(ctx)
         return self.op(value)
-
 
 @dataclass
 class Call(Expr):
@@ -186,7 +174,6 @@ class Call(Expr):
             return func(*args)
         raise TypeError(f"'{func}' não é uma função!")
 
-
 @dataclass
 class This(Expr):
     """
@@ -195,7 +182,6 @@ class This(Expr):
     Ex.: this
     """
 
-
 @dataclass
 class Super(Expr):
     """
@@ -203,7 +189,6 @@ class Super(Expr):
 
     Ex.: super.x
     """
-
 
 @dataclass
 class Assign(Expr):
@@ -219,7 +204,6 @@ class Assign(Expr):
         result = self.value.eval(ctx)
         ctx.assign(self.name, result)
         return result
-
 
 @dataclass
 class Getattr(Expr):
@@ -238,7 +222,6 @@ class Getattr(Expr):
         except AttributeError:
             raise AttributeError(f"O objeto {obj_value} não possui o atributo '{self.name}'")
 
-
 @dataclass
 class Setattr(Expr):
     """
@@ -256,9 +239,8 @@ class Setattr(Expr):
         setattr(obj_val, self.name, val)
         return val
 
-#
 # COMANDOS
-#
+
 @dataclass
 class Print(Stmt):
     """
@@ -284,7 +266,6 @@ class Print(Stmt):
         else:
             print(value)
 
-
 @dataclass
 class Return(Stmt):
     """
@@ -297,8 +278,6 @@ class Return(Stmt):
     def eval(self, ctx: Ctx):
         return_value = self.value.eval(ctx) if self.value else None
         raise LoxReturn(return_value)
-
-
 
 @dataclass
 class VarDef(Stmt):
@@ -351,7 +330,6 @@ class While(Stmt):
                 break
             self.body.eval(ctx)
 
-
 @dataclass
 class Block(Node):
     """
@@ -365,7 +343,6 @@ class Block(Node):
         new_ctx = ctx.push({})
         for stmt in self.stmts:
             stmt.eval(new_ctx)
-
 
 @dataclass
 class Function(Stmt):
