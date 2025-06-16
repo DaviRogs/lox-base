@@ -2,9 +2,12 @@
 
 program    : declaration*
 
-?declaration : fun_decl
+?declaration : class_decl
+             | fun_decl
              | var_decl
              | stmt
+
+class_decl   : "class" VAR "{" "}" -> class_declaration
 
 fun_decl   : "fun" VAR "(" fun_params ")" block -> function_declaration
 fun_params : [VAR ("," VAR)*]
@@ -89,7 +92,7 @@ call       : atom "(" params ")"
 params     : [expr ("," expr)*]
 
 BOOL.2     : "true" | "false"
-VAR.1      : /[a-z_]\w*/
+VAR        : /[a-zA-Z_]\w*/
 NUMBER     : /([1-9][0-9]*|0)(\.[0-9]+)?/ 
 STRING     : /"[^"]*"/
 NIL.2      : "nil"

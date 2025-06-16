@@ -162,3 +162,13 @@ class LoxTransformer(Transformer):
 
     def super_getattr(self, name):
         return Super(name.name)
+    
+    def class_declaration(self, name):
+        # 'name' é um nó Var, então pegamos seu nome como string
+        return Class(name.name)
+
+    def function_declaration(self, name, params, body):
+        return Function(name.name, params or [], body)
+
+    def fun_params(self, *params):
+        return list(params)

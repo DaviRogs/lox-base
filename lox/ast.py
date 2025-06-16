@@ -1,50 +1,34 @@
 from abc import ABC
 from dataclasses import dataclass
 from typing import Callable
-from .runtime import LoxFunction, LoxReturn
+from .runtime import LoxFunction, LoxReturn, LoxClass, print as lox_print
 
 from .ctx import Ctx
 
-# Declaramos nossa classe base num módulo separado para esconder um pouco de
-# Python relativamente avançado de quem não se interessar pelo assunto.
-#
-# A classe Node implementa um método `pretty` que imprime as árvores de forma
-# legível. Também possui funcionalidades para navegar na árvore usando cursores
-# e métodos de visitação.
-from .node import Node
+# Importações para a validação semântica
+from .node import Node, Cursor
+from .errors import SemanticError
 
+# Palavras reservadas da linguagem Lox
+RESERVED_WORDS = {
+    "and", "class", "else", "false", "for", "fun", "if", "nil",
+    "or", "print", "return", "super", "this", "true", "var", "while"
+}
 
 # TIPOS BÁSICOS
 
-# Tipos de valores que podem aparecer durante a execução do programa
 Value = bool | str | float | None
 
 
 class Expr(Node, ABC):
-    """
-    Classe base para expressões.
-
-    Expressões são nós que podem ser avaliados para produzir um valor.
-    Também podem ser atribuídos a variáveis, passados como argumentos para
-    funções, etc.
-    """
+    """Classe base para expressões."""
 
 class Stmt(Node, ABC):
-    """
-    Classe base para comandos.
-
-    Comandos são associdos a construtos sintáticos que alteram o fluxo de
-    execução do código ou declaram elementos como classes, funções, etc.
-    """
+    """Classe base para comandos."""
 
 @dataclass
 class Program(Node):
-    """
-    Representa um programa.
-
-    Um programa é uma lista de comandos.
-    """
-
+    """Representa um programa."""
     stmts: list[Stmt]
 
     def eval(self, ctx: Ctx):
@@ -55,12 +39,7 @@ class Program(Node):
 
 @dataclass
 class BinOp(Expr):
-    """
-    Uma operação infixa com dois operandos.
-
-    Ex.: x + y, 2 * x, 3.14 > 3 and 3.14 < 4
-    """
-
+    """Uma operação infixa com dois operandos."""
     left: Expr
     right: Expr
     op: Callable[[Value, Value], Value]
@@ -72,12 +51,7 @@ class BinOp(Expr):
 
 @dataclass
 class Var(Expr):
-    """
-    Uma variável no código
-
-    Ex.: x, y, z
-    """
-
+    """Uma variável no código."""
     name: str
 
     def eval(self, ctx: Ctx):
@@ -88,13 +62,7 @@ class Var(Expr):
 
 @dataclass
 class Literal(Expr):
-    """
-    Representa valores literais no código, ex.: strings, booleanos,
-    números, etc.
-
-    Ex.: "Hello, world!", 42, 3.14, true, nil
-    """
-
+    """Representa valores literais no código."""
     value: Value
 
     def eval(self, ctx: Ctx):
@@ -103,20 +71,14 @@ class Literal(Expr):
 @dataclass
 class ExprStmt(Stmt):
     expr: Expr
-
     def eval(self, ctx: Ctx):
         self.expr.eval(ctx)
 
 @dataclass
 class And(Expr):
-    """
-    Uma operação infixa com dois operandos.
-
-    Ex.: x and y
-    """
+    """Uma operação 'and'."""
     left: Expr
     right: Expr
-
     def eval(self, ctx: Ctx):
         left_val = self.left.eval(ctx)
         if left_val is False or left_val is None:
@@ -125,30 +87,20 @@ class And(Expr):
 
 @dataclass
 class Or(Expr):
-    """
-    Uma operação infixa com dois operandos.
-    Ex.: x or y
-    """
+    """Uma operação 'or'."""
     left: Expr
     right: Expr
-
     def eval(self, ctx: Ctx):
         left_val = self.left.eval(ctx)
         if left_val is not False and left_val is not None:
-            if isinstance(left_val, float) and left_val == 0:
-                return left_val
-            if isinstance(left_val, str) and left_val == "":
-                return left_val
+            if isinstance(left_val, float) and left_val == 0: return left_val
+            if isinstance(left_val, str) and left_val == "": return left_val
             return left_val
         return self.right.eval(ctx)
 
 @dataclass
 class UnaryOp(Expr):
-    """
-    Uma operação prefixa com um operando.
-
-    Ex.: -x, !x
-    """
+    """Uma operação prefixa com um operando."""
     operand: Expr
     op: Callable[[Value], Value]
 
@@ -158,45 +110,28 @@ class UnaryOp(Expr):
 
 @dataclass
 class Call(Expr):
-    """
-    Uma chamada de função.
-
-    Ex.: fat(42)
-    """
+    """Uma chamada de função."""
     callee: Expr
     params: list[Expr]
     
     def eval(self, ctx: Ctx):
         func = self.callee.eval(ctx)
         args = [param.eval(ctx) for param in self.params]
-
         if callable(func):
             return func(*args)
         raise TypeError(f"'{func}' não é uma função!")
 
 @dataclass
 class This(Expr):
-    """
-    Acesso ao `this`.
-
-    Ex.: this
-    """
+    """Acesso ao `this`."""
 
 @dataclass
 class Super(Expr):
-    """
-    Acesso a method ou atributo da superclasse.
-
-    Ex.: super.x
-    """
+    """Acesso a método ou atributo da superclasse."""
 
 @dataclass
 class Assign(Expr):
-    """
-    Atribuição de variável.
-
-    Ex.: x = 42
-    """
+    """Atribuição de variável."""
     name: str
     value: Expr
 
@@ -207,11 +142,7 @@ class Assign(Expr):
 
 @dataclass
 class Getattr(Expr):
-    """
-    Acesso a atributo de um objeto.
-
-    Ex.: x.y
-    """
+    """Acesso a atributo de um objeto."""
     obj: Expr
     name: str
 
@@ -224,11 +155,7 @@ class Getattr(Expr):
 
 @dataclass
 class Setattr(Expr):
-    """
-    Atribuição de atributo de um objeto.
-
-    Ex.: x.y = 42
-    """
+    """Atribuição de atributo de um objeto."""
     obj: Expr
     name: str
     value: Expr
@@ -243,36 +170,16 @@ class Setattr(Expr):
 
 @dataclass
 class Print(Stmt):
-    """
-    Representa uma instrução de impressão.
-
-    Ex.: print "Hello, world!";
-    """
+    """Representa uma instrução de impressão."""
     expr: Expr
 
     def eval(self, ctx: Ctx):
         value = self.expr.eval(ctx)
-        if value is None:
-            print("nil")
-        elif value is True:
-            print("true")
-        elif value is False:
-            print("false")
-        elif isinstance(value, float):
-            if value.is_integer():
-                print(int(value))
-            else:
-                print(value)
-        else:
-            print(value)
+        lox_print(value)
 
 @dataclass
 class Return(Stmt):
-    """
-    Representa uma instrução de retorno.
-
-    Ex.: return x;
-    """
+    """Representa uma instrução de retorno."""
     value: Expr | None
 
     def eval(self, ctx: Ctx):
@@ -281,11 +188,7 @@ class Return(Stmt):
 
 @dataclass
 class VarDef(Stmt):
-    """
-    Representa uma declaração de variável.
-
-    Ex.: var x = 42;
-    """
+    """Representa uma declaração de variável."""
     name: str
     initializer: Expr
 
@@ -293,21 +196,24 @@ class VarDef(Stmt):
         value = self.initializer.eval(ctx)
         ctx.var_def(self.name, value)
 
+    # Validação Semântica para VarDef
+    def validate_self(self, cursor: Cursor):
+        """Verifica se o nome da variável não é uma palavra reservada."""
+        if self.name in RESERVED_WORDS:
+            raise SemanticError(
+                f"Cannot use reserved word '{self.name}' as a variable name.",
+                token=self.name
+            )
+
 @dataclass
 class If(Stmt):
-    """
-    Representa uma instrução condicional.
-
-    Ex.: if (x > 0) { ... } else { ... }
-    """
+    """Representa uma instrução condicional."""
     condition: Expr
     then_branch: Stmt
     else_branch: Stmt
 
     def eval(self, ctx: Ctx):
         condition_val = self.condition.eval(ctx)
-
-        # Em Lox, a condição só é falsa se for "false" ou "nil"
         if condition_val is not False and condition_val is not None:
             self.then_branch.eval(ctx)
         else:
@@ -315,11 +221,7 @@ class If(Stmt):
 
 @dataclass
 class While(Stmt):
-    """
-    Representa um laço de repetição.
-
-    Ex.: while (x > 0) { ... }
-    """
+    """Representa um laço de repetição."""
     condition: Expr
     body: Stmt
 
@@ -332,11 +234,7 @@ class While(Stmt):
 
 @dataclass
 class Block(Node):
-    """
-    Representa bloco de comandos.
-
-    Ex.: { var x = 42; print x;  }
-    """
+    """Representa um bloco de comandos."""
     stmts: list[Stmt]
 
     def eval(self, ctx: Ctx):
@@ -344,27 +242,74 @@ class Block(Node):
         for stmt in self.stmts:
             stmt.eval(new_ctx)
 
+    # Validação Semântica para Block
+    def validate_self(self, cursor: Cursor):
+        """Verifica se não há duas variáveis com o mesmo nome no mesmo bloco."""
+        seen = set()
+        for stmt in self.stmts:
+            if isinstance(stmt, VarDef):
+                if stmt.name in seen:
+                    raise SemanticError(
+                        f"Variable '{stmt.name}' has already been declared in this block.",
+                        token=stmt.name
+                    )
+                seen.add(stmt.name)
+
 @dataclass
 class Function(Stmt):
-    """
-    Representa uma função.
-
-    Ex.: fun f(x, y) { ... }
-    """
+    """Representa uma declaração de função."""
     name: str
     params: list[Var]
     body: Block
 
     def eval(self, ctx: Ctx):
+        # ... (código eval existente, sem alterações)
         param_names = [p.name for p in self.params]
         function = LoxFunction(self.name, param_names, self.body, ctx)
         ctx.var_def(self.name, function)
         return None
 
+    # Validação Semântica para Function
+    def validate_self(self, cursor: Cursor):
+        """
+        Valida a declaração da função para:
+        0. Nomes de parâmetros que são palavras reservadas. (NOVA VERIFICAÇÃO)
+        1. Parâmetros com nomes duplicados.
+        2. Variáveis no corpo que sombreiam parâmetros.
+        """
+        # 0. (NOVO) Verifica se algum parâmetro usa uma palavra reservada
+        for param in self.params:
+            if param.name in RESERVED_WORDS:
+                raise SemanticError(
+                    f"Cannot use reserved word '{param.name}' as a parameter name.",
+                    token=param.name
+                )
+        
+        # 1. Verifica parâmetros duplicados
+        param_names = set()
+        for param in self.params:
+            if param.name in param_names:
+                raise SemanticError(
+                    f"Duplicate parameter name '{param.name}' in function declaration.",
+                    token=param.name
+                )
+            param_names.add(param.name)
+
+        # 2. Verifica se uma variável declarada no corpo tem o mesmo nome de um parâmetro
+        for stmt in self.body.stmts:
+            if isinstance(stmt, VarDef):
+                if stmt.name in param_names:
+                    raise SemanticError(
+                        f"Variable '{stmt.name}' shadows a function parameter.",
+                        token=stmt.name
+                    )
+
 @dataclass
 class Class(Stmt):
-    """
-    Representa uma classe.
+    """Representa uma declaração de classe."""
+    name: str
 
-    Ex.: class B < A { ... }
-    """
+    def eval(self, ctx: Ctx):
+        klass = LoxClass(name=self.name)
+        ctx.var_def(self.name, klass)
+        return None
